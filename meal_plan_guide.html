@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Meal Plan Guide — 1500 Cal / 100g Protein</title>
+<style>
+  :root {
+    --green: #2d7a56;
+    --green-light: #e8f5ee;
+    --green-mid: #9fd6b8;
+    --amber: #b86b0a;
+    --amber-light: #fef3e2;
+    --purple: #5a3fa0;
+    --purple-light: #f0ecfd;
+    --blue: #1a5fa8;
+    --blue-light: #e8f1fb;
+    --red: #991f1f;
+    --red-light: #fdf0f0;
+    --gray: #444;
+    --gray-light: #f7f7f5;
+    --border: #e0ddd6;
+    --text: #1a1a1a;
+    --text-muted: #666;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: var(--text); background: #fafaf8; font-size: 15px; line-height: 1.6; }
+
+  /* Header */
+  .site-header { background: var(--green); color: white; padding: 2.5rem 2rem 2rem; }
+  .site-header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .site-header p { opacity: 0.85; font-size: 0.95rem; max-width: 560px; }
+  .macro-strip { display: flex; gap: 1.5rem; margin-top: 1.2rem; flex-wrap: wrap; }
+  .macro-chip { background: rgba(255,255,255,0.18); border-radius: 20px; padding: 4px 14px; font-size: 0.85rem; font-weight: 500; }
+
+  /* Nav */
+  .nav-bar { background: white; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; overflow-x: auto; }
+  .nav-inner { display: flex; gap: 0; padding: 0 1rem; min-width: max-content; }
+  .nav-btn { padding: 14px 18px; font-size: 0.88rem; font-weight: 500; color: var(--text-muted); background: none; border: none; cursor: pointer; border-bottom: 2.5px solid transparent; white-space: nowrap; transition: all 0.15s; }
+  .nav-btn:hover { color: var(--text); }
+  .nav-btn.active { color: var(--green); border-bottom-color: var(--green); }
+
+  /* Layout */
+  .main { max-width: 860px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  /* Section */
+  .section { display: none; }
+  .section.active { display: block; }
+  .section-intro { color: var(--text-muted); font-size: 0.93rem; margin-bottom: 1.5rem; padding: 12px 16px; background: var(--gray-light); border-radius: var(--radius-sm); border-left: 3px solid var(--border); }
+
+  /* Cards */
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .card-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text); }
+  .card-num { display: inline-block; background: var(--green); color: white; border-radius: 50%; width: 24px; height: 24px; font-size: 0.75rem; font-weight: 700; line-height: 24px; text-align: center; margin-right: 8px; vertical-align: middle; }
+
+  /* Badges */
+  .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .badge { font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+  .badge-cal { background: var(--amber-light); color: var(--amber); }
+  .badge-protein { background: var(--green-light); color: var(--green); }
+  .badge-servings { background: var(--purple-light); color: var(--purple); }
+  .badge-tip { background: var(--blue-light); color: var(--blue); }
+  .badge-warn { background: var(--red-light); color: var(--red); }
+
+  /* Macros grid */
+  .macro-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .macro-box { background: var(--gray-light); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+  .macro-val { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+  .macro-label { font-size: 0.73rem; color: var(--text-muted); margin-top: 1px; }
+
+  /* Recipe sub-sections */
+  .recipe-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 12px 0 5px; }
+  ul.ingr { list-style: none; padding: 0; }
+  ul.ingr li { font-size: 0.9rem; color: var(--text-muted); padding: 4px 0 4px 16px; border-bottom: 1px solid var(--border); position: relative; }
+  ul.ingr li:last-child { border-bottom: none; }
+  ul.ingr li::before { content: "–"; position: absolute; left: 0; color: #bbb; }
+  ol.steps { padding: 0; list-style: none; counter-reset: steps; }
+  ol.steps li { counter-increment: steps; font-size: 0.9rem; color: var(--text-muted); padding: 5px 0 5px 30px; position: relative; border-bottom: 1px solid var(--border); }
+  ol.steps li:last-child { border-bottom: none; }
+  ol.steps li::before { content: counter(steps); position: absolute; left: 0; top: 5px; width: 20px; height: 20px; background: var(--green-light); color: var(--green); border-radius: 50%; font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 20px; }
+  .body-text { font-size: 0.9rem; color: var(--text-muted); line-height: 1.65; }
+
+  /* Day plan */
+  .day-header { font-size: 1.1rem; font-weight: 700; margin: 1.5rem 0 0.75rem; color: var(--text); }
+  .meal-block { background: var(--gray-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px; }
+  .meal-block-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+  .meal-row { display: flex; justify-content: space-between; font-size: 0.88rem; padding: 3px 0; color: var(--text); }
+  .meal-row span:last-child { color: var(--text-muted); font-size: 0.83rem; white-space: nowrap; }
+  .warn-note { background: var(--red-light); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.85rem; color: var(--red); margin-top: 10px; }
+
+  /* Cuisine cards */
+  .cuisine-name { font-size: 1rem; font-weight: 700; margin-bottom: 8px; color: var(--green); }
+  .order-item { font-size: 0.88rem; color: var(--text-muted); padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .order-item:last-of-type { border-bottom: none; }
+  .avoid-line { font-size: 0.82rem; color: var(--red); margin-top: 8px; }
+
+  /* Base note box */
+  .base-box { background: var(--green-light); border: 1px solid var(--green-mid); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--green); }
+
+  /* Divider */
+  hr.soft { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+  /* Print / edit tip */
+  .edit-tip { background: var(--blue-light); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 0.85rem; color: var(--blue); margin-bottom: 1.5rem; }
+
+  @media (max-width: 600px) {
+    .site-header h1 { font-size: 1.5rem; }
+    .macro-grid { grid-template-columns: repeat(2, 1fr); }
+    .meal-row { flex-direction: column; }
+    .meal-row span:last-child { color: var(--green); }
+  }
+  @media print {
+    .nav-bar { display: none; }
+    .section { display: block !important; }
+    .section-intro { break-after: avoid; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <h1>My Meal Plan Guide</h1>
+  <p>Calorie deficit friendly recipes — low to no added carbs, high protein, built for home days and class days.</p>
+  <div class="macro-strip">
+    <span class="macro-chip">🎯 ~1,500 cal / day</span>
+    <span class="macro-chip">💪 ~100g protein / day</span>
+    <span class="macro-chip">🚫 No added starch carbs</span>
+  </div>
+</header>
+
+<nav class="nav-bar">
+  <div class="nav-inner">
+    <button class="nav-btn active" onclick="show('gummies',this)">🍬 Gummies</button>
+    <button class="nav-btn" onclick="show('breakfast',this)">🍳 Breakfast</button>
+    <button class="nav-btn" onclick="show('meals',this)">🍽 Lunch &amp; Dinner</button>
+    <button class="nav-btn" onclick="show('snacks',this)">🍎 Snacks</button>
+    <button class="nav-btn" onclick="show('dayplans',this)">📅 Day Plans</button>
+    <button class="nav-btn" onclick="show('eatingout',this)">🍜 Eating Out</button>
+  </div>
+</nav>
+
+<main class="main">
+
+<div class="edit-tip">
+  💡 <strong>To add a new recipe:</strong> copy any <code>&lt;div class="card"&gt;...&lt;/div&gt;</code> block and paste it inside the relevant section. Update the title, badges, ingredients, and steps. Open this file in any browser — no internet needed.
+</div>
+
+<!-- ==================== GUMMIES ==================== -->
+<div id="gummies" class="section active">
+  <div class="section-intro">Base formula: 2 cups liquid (water or juice) + 4 tbsp Vital Proteins beef gelatin + 4 tbsp chia seeds + allulose/monk fruit sweetener + optional fruit. Makes ~20 gummies. One serving = 5 gummies.</div>
+
+  <div class="base-box">
+    <strong>Method (all flavors):</strong> Gently warm liquid (don't boil). Whisk in gelatin until fully dissolved. Stir in chia seeds, sweetener, and any add-ins. Pour into silicone molds or a lined baking dish. Refrigerate 2+ hours until set. Slice or pop from molds. Store in fridge up to 1 week.
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">1</span>Classic Strawberry Lemonade</div>
+    <div class="badge-row"><span class="badge badge-cal">~90 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1 cup fresh-squeezed lemon juice + 1 cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>½ cup diced strawberries, blended smooth</li>
+      <li>3 tbsp allulose</li>
+      <li>Pinch of salt</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">2</span>Mango Turmeric Glow</div>
+    <div class="badge-row"><span class="badge badge-cal">~100 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1½ cups unsweetened mango juice + ½ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>½ tsp turmeric, pinch black pepper</li>
+      <li>¼ tsp fresh grated ginger</li>
+      <li>2 tbsp allulose</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">3</span>Berry Hibiscus</div>
+    <div class="badge-row"><span class="badge badge-cal">~85 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">2 cups strong-brewed hibiscus tea, cooled</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>½ cup mixed berry puree (blend fresh or frozen berries)</li>
+      <li>3 tbsp allulose</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">4</span>Watermelon Mint</div>
+    <div class="badge-row"><span class="badge badge-cal">~88 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1¾ cups blended seedless watermelon (strained) + ¼ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>5 fresh mint leaves, muddled into warm liquid</li>
+      <li>2 tbsp allulose</li>
+      <li>Squeeze of lime</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">5</span>Peach Green Tea</div>
+    <div class="badge-row"><span class="badge badge-cal">~90 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1½ cups brewed green tea (cooled) + ½ cup fresh peach puree</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>2 tbsp allulose</li>
+      <li>¼ tsp vanilla extract</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">6</span>Coconut Pineapple</div>
+    <div class="badge-row"><span class="badge badge-cal">~115 cal / serving</span><span class="badge badge-protein">~7g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1 cup light coconut milk + 1 cup unsweetened pineapple juice</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>2 tbsp allulose</li>
+      <li>Pinch of salt</li>
+      <li>Note: coconut milk adds slightly more fat/cal</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">7</span>Grape Elderflower</div>
+    <div class="badge-row"><span class="badge badge-cal">~95 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1½ cups unsweetened purple grape juice + ½ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>1 tsp elderflower extract (or a splash of sugar-free elderflower cordial)</li>
+      <li>2 tbsp allulose</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">8</span>Apple Cider Ginger</div>
+    <div class="badge-row"><span class="badge badge-cal">~95 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1½ cups unsweetened apple cider + ½ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>½ tsp fresh grated ginger</li>
+      <li>¼ tsp cinnamon, pinch of clove</li>
+      <li>2 tbsp allulose</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">9</span>Tart Cherry Vanilla</div>
+    <div class="badge-row"><span class="badge badge-cal">~100 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1½ cups tart cherry juice + ½ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>½ tsp vanilla extract</li>
+      <li>2 tbsp allulose</li>
+      <li>Bonus: tart cherry is great for recovery and sleep</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">10</span>Citrus Sunrise (Orange + Carrot)</div>
+    <div class="badge-row"><span class="badge badge-cal">~105 cal / serving</span><span class="badge badge-protein">~8g protein</span><span class="badge badge-servings">4 servings</span></div>
+    <div class="recipe-label">Liquid</div>
+    <div class="body-text">1 cup fresh orange juice + ½ cup carrot juice + ½ cup water</div>
+    <div class="recipe-label">Add-ins</div>
+    <ul class="ingr">
+      <li>Pinch of turmeric</li>
+      <li>2 tbsp allulose</li>
+      <li>Squeeze of lemon</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== BREAKFAST ==================== -->
+<div id="breakfast" class="section">
+  <div class="section-intro">All breakfasts are ~280–380 cal and ~12–35g protein per serving, making 2–3 servings. On class days, pair a lower-protein breakfast with a protein-forward evening snack.</div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">1</span>Chia Pudding (Your Recipe, Refined)</div>
+    <div class="badge-row"><span class="badge badge-cal">~310 cal / serving</span><span class="badge badge-protein">~12g protein</span><span class="badge badge-servings">3 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>4 tbsp chia seeds</li>
+      <li>1 cup unsweetened almond or oat milk</li>
+      <li>2 tsp monk fruit sweetener</li>
+      <li>½ tsp vanilla extract</li>
+      <li>Topping per serving: ½ cup mixed berries + 1 tbsp almond butter</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Whisk chia seeds into milk with sweetener and vanilla.</li>
+      <li>Refrigerate overnight or 4+ hours, stirring once after 30 min.</li>
+      <li>Portion into 3 jars. Top with fruit and almond butter to serve.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">2</span>Greek Yogurt Parfait</div>
+    <div class="badge-row"><span class="badge badge-cal">~320 cal / serving</span><span class="badge badge-protein">~26g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients (per serving)</div>
+    <ul class="ingr">
+      <li>1 cup plain 2% Greek yogurt (Fage or Chobani)</li>
+      <li>½ cup fresh berries</li>
+      <li>1 tbsp almond butter</li>
+      <li>1 tsp monk fruit sweetener</li>
+      <li>Optional: pinch of cinnamon</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Layer yogurt in a bowl or jar.</li>
+      <li>Top with berries, drizzle almond butter, add sweetener and cinnamon.</li>
+    </ol>
+    <div class="body-text" style="margin-top:10px;">No cook. One of the highest-protein breakfasts in this guide — great for class days when you need fuel that lasts.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">3</span>Egg &amp; Smoked Salmon Scramble</div>
+    <div class="badge-row"><span class="badge badge-cal">~380 cal / serving</span><span class="badge badge-protein">~32g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>4 large eggs</li>
+      <li>2 oz smoked salmon, torn into pieces</li>
+      <li>2 tbsp cream cheese or Greek yogurt</li>
+      <li>¼ red onion, small dice</li>
+      <li>1 tsp avocado oil, salt, pepper, fresh or dried dill</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Sauté onion in avocado oil for 2 minutes.</li>
+      <li>Add whisked eggs and cream cheese. Scramble on low heat, slowly.</li>
+      <li>Fold in salmon pieces at the very end. Season with dill.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">4</span>Cottage Cheese Bowl with Fruit</div>
+    <div class="badge-row"><span class="badge badge-cal">~290 cal / serving</span><span class="badge badge-protein">~28g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients (per serving)</div>
+    <ul class="ingr">
+      <li>1 cup low-fat cottage cheese (Good Culture brand recommended)</li>
+      <li>½ cup pineapple chunks or sliced peach</li>
+      <li>1 tbsp hemp seeds</li>
+      <li>Drizzle of allulose, pinch of cinnamon</li>
+    </ul>
+    <div class="body-text" style="margin-top:10px;">No cook needed. Portable in a container for class days. Hemp seeds add omega-3s and extra protein.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">5</span>Turkey &amp; Egg White Veggie Scramble</div>
+    <div class="badge-row"><span class="badge badge-cal">~350 cal / serving</span><span class="badge badge-protein">~35g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>3 oz lean ground turkey (93/7)</li>
+      <li>4 egg whites (or ½ cup from carton)</li>
+      <li>½ cup baby spinach</li>
+      <li>¼ bell pepper, diced</li>
+      <li>1 tsp avocado oil, garlic powder, cumin, salt</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Brown turkey in avocado oil with garlic powder and cumin.</li>
+      <li>Add bell pepper, cook 2 minutes. Add spinach until wilted.</li>
+      <li>Pour in egg whites and scramble until cooked through.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">6</span>Banana "Nice Cream" Protein Bowl</div>
+    <div class="badge-row"><span class="badge badge-cal">~340 cal / serving</span><span class="badge badge-protein">~22g protein</span><span class="badge badge-servings">2 servings</span><span class="badge badge-tip">Your banana chocolate craving</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>2 frozen bananas, blended until smooth and creamy</li>
+      <li>1 scoop unflavored or vanilla collagen peptides (or 2 tbsp)</li>
+      <li>1 tbsp almond butter</li>
+      <li>1 tsp cacao nibs or unsweetened cocoa powder</li>
+      <li>Pinch of salt</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Blend frozen bananas in a high-powered blender or food processor until completely smooth and ice-cream-like — scrape down sides as needed.</li>
+      <li>Blend in collagen peptides.</li>
+      <li>Serve in a bowl topped with almond butter drizzle and cacao nibs.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">7</span>Banana Chocolate Protein Mug Cake</div>
+    <div class="badge-row"><span class="badge badge-cal">~360 cal / serving</span><span class="badge badge-protein">~24g protein</span><span class="badge badge-servings">2 servings</span><span class="badge badge-tip">Low-carb banana bread fix</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>½ ripe banana, mashed</li>
+      <li>2 large eggs</li>
+      <li>2 tbsp almond flour</li>
+      <li>1 tbsp unsweetened cocoa powder</li>
+      <li>1 tbsp allulose</li>
+      <li>½ tsp baking powder, pinch of salt</li>
+      <li>Optional topping: 1 tsp almond butter</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Mix all ingredients together until smooth in a mug or ramekin.</li>
+      <li>Microwave 90 seconds, or bake at 350°F for 12 minutes.</li>
+      <li>Serve warm. Top with almond butter if desired.</li>
+    </ol>
+    <div class="body-text" style="margin-top:10px;">To make 2 servings at once: double the recipe and pour into a small greased baking dish. Bake at 350°F for 18–20 min.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">8</span>Savory Egg Cups (Batch Egg Muffins)</div>
+    <div class="badge-row"><span class="badge badge-cal">~310 cal / serving (3 cups)</span><span class="badge badge-protein">~26g protein</span><span class="badge badge-servings">3 servings (9 cups total)</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>6 large eggs</li>
+      <li>3 oz turkey sausage or cooked shredded chicken</li>
+      <li>½ cup chopped spinach</li>
+      <li>¼ cup diced bell pepper</li>
+      <li>Salt, pepper, garlic powder</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Whisk eggs with seasoning. Stir in all fillings.</li>
+      <li>Grease a 9-cup muffin tin. Divide mixture evenly.</li>
+      <li>Bake at 350°F for 18–20 minutes until set and golden on top.</li>
+      <li>Store in the fridge for up to 4 days. Reheat 45 seconds in microwave.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">9</span>Smoked Salmon &amp; Avocado Plate</div>
+    <div class="badge-row"><span class="badge badge-cal">~370 cal / serving</span><span class="badge badge-protein">~24g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients (per serving)</div>
+    <ul class="ingr">
+      <li>3 oz smoked salmon</li>
+      <li>½ avocado, sliced</li>
+      <li>2 tbsp cream cheese or labneh</li>
+      <li>Sliced cucumber, capers, red onion, fresh dill, lemon wedge</li>
+    </ul>
+    <div class="body-text" style="margin-top:10px;">No cook — arrange on a plate and serve. The fat from avocado and salmon keeps you full for hours. Great leisurely home breakfast.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">10</span>Warm Egg Drop Soup (Savory Breakfast)</div>
+    <div class="badge-row"><span class="badge badge-cal">~280 cal / serving</span><span class="badge badge-protein">~20g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>3 cups chicken or bone broth (low sodium)</li>
+      <li>3 eggs, beaten</li>
+      <li>½ cup chopped scallions</li>
+      <li>1 tsp sesame oil</li>
+      <li>½ tsp ginger, soy sauce or coconut aminos to taste</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Bring broth to a gentle simmer with ginger and a splash of soy sauce.</li>
+      <li>Slowly pour in beaten eggs while stirring in a circle to create ribbons.</li>
+      <li>Top with scallions and a drizzle of sesame oil. Serve immediately.</li>
+    </ol>
+    <div class="body-text" style="margin-top:10px;">Also works as a light lunch. Add shredded chicken for extra protein.</div>
+  </div>
+</div>
+
+<!-- ==================== MEALS ==================== -->
+<div id="meals" class="section">
+  <div class="section-intro">All lunch and dinner recipes make 2 servings, ~320–470 cal each, with 35–44g protein. No added starch. Great for meal prepping 2 days at a time.</div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">1</span>Seasoned Shrimp Stir-Fry (Your Recipe)</div>
+    <div class="badge-row"><span class="badge badge-cal">~380 cal / serving</span><span class="badge badge-protein">~38g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>½ lb large shrimp, peeled and deveined</li>
+      <li>½ bell pepper, ¼ onion, 1 carrot — all chopped</li>
+      <li>1 tsp avocado oil</li>
+      <li>½ tsp Maggi Masala seasoning</li>
+      <li>½ tsp garlic paste, ½ tsp ginger paste</li>
+      <li>Salt, pepper, squeeze of lemon</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Heat oil in a skillet. Sauté onion + garlic + ginger paste 2 minutes.</li>
+      <li>Add carrot and bell pepper, cook 3 minutes until slightly softened.</li>
+      <li>Add shrimp and Maggi Masala. Cook until shrimp turns pink, about 3–4 minutes.</li>
+      <li>Finish with a squeeze of lemon. Serve as is or over cauliflower rice.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">2</span>Morey's Salmon with Roasted Veggies</div>
+    <div class="badge-row"><span class="badge badge-cal">~420 cal / serving</span><span class="badge badge-protein">~36g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>2 servings Morey's Seasoned Wild Alaskan Salmon</li>
+      <li>1 cup broccoli florets, 1 cup zucchini, ½ cup cherry tomatoes</li>
+      <li>1 tsp avocado oil, garlic, salt, pepper</li>
+      <li>Lemon wedges to serve</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Toss veggies with avocado oil, garlic, salt, pepper. Roast at 400°F for 20 minutes.</li>
+      <li>Cook salmon per package directions (bake or pan-sear).</li>
+      <li>Plate together and squeeze lemon over everything.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">3</span>Chicken Tikka (No Rice)</div>
+    <div class="badge-row"><span class="badge badge-cal">~410 cal / serving</span><span class="badge badge-protein">~42g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>12 oz boneless skinless chicken thigh, cubed</li>
+      <li>½ cup plain Greek yogurt (for marinade)</li>
+      <li>1 tsp each: garam masala, cumin, coriander, turmeric, chili powder</li>
+      <li>2 garlic cloves + 1 tsp ginger (for marinade)</li>
+      <li>½ cup diced tomatoes, ¼ cup heavy cream or coconut cream</li>
+      <li>1 tsp avocado oil</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Marinate chicken in yogurt + spices + garlic + ginger for at least 30 minutes.</li>
+      <li>Grill or broil chicken until cooked through with a slight char.</li>
+      <li>In the same pan, sauté tomatoes in oil, add remaining spices, then add cream. Simmer 5 minutes.</li>
+      <li>Toss grilled chicken into the sauce. Serve with cucumber slices or cauliflower rice.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">4</span>Egg Drop Bone Broth Soup + Shredded Chicken</div>
+    <div class="badge-row"><span class="badge badge-cal">~320 cal / serving</span><span class="badge badge-protein">~35g protein</span><span class="badge badge-servings">2 servings</span><span class="badge badge-tip">Your broth-y soup option</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>4 cups low-sodium chicken bone broth</li>
+      <li>6 oz cooked shredded chicken breast</li>
+      <li>2 eggs, beaten</li>
+      <li>1 cup baby bok choy or spinach</li>
+      <li>1 tsp sesame oil, soy sauce or coconut aminos to taste, ginger, scallions</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Bring broth to a simmer with ginger and soy sauce.</li>
+      <li>Add shredded chicken and bok choy. Cook 3 minutes.</li>
+      <li>Stream in beaten eggs while stirring slowly to create ribbons.</li>
+      <li>Finish with sesame oil and scallions. Serve immediately.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">5</span>Ground Turkey Taco Bowl (No Tortilla)</div>
+    <div class="badge-row"><span class="badge badge-cal">~440 cal / serving</span><span class="badge badge-protein">~40g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>10 oz lean ground turkey (93/7)</li>
+      <li>1 tsp each: cumin, chili powder, garlic powder, smoked paprika, oregano</li>
+      <li>½ cup no-sugar-added salsa</li>
+      <li>Base: shredded lettuce or cauliflower rice</li>
+      <li>Toppings: ¼ avocado, 2 tbsp Greek yogurt (instead of sour cream), pico de gallo</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Brown turkey in a dry pan. Season with taco spice blend.</li>
+      <li>Add salsa and simmer 5 minutes.</li>
+      <li>Serve over lettuce or cauliflower rice with all toppings.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">6</span>Lemon Herb Baked Cod</div>
+    <div class="badge-row"><span class="badge badge-cal">~350 cal / serving</span><span class="badge badge-protein">~40g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>2 cod fillets (5–6 oz each)</li>
+      <li>1 tbsp avocado oil</li>
+      <li>Zest + juice of 1 lemon</li>
+      <li>2 garlic cloves, minced</li>
+      <li>Fresh or dried: thyme, parsley, dill</li>
+      <li>Side: sautéed asparagus or green beans</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Mix oil, lemon zest + juice, garlic, and herbs into a paste.</li>
+      <li>Coat both sides of the cod fillets.</li>
+      <li>Bake at 400°F for 12–15 minutes until cod flakes easily.</li>
+      <li>Serve with sautéed greens on the side.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">7</span>Spicy Korean-Inspired Ground Beef Bowl</div>
+    <div class="badge-row"><span class="badge badge-cal">~450 cal / serving</span><span class="badge badge-protein">~38g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>10 oz lean ground beef (90/10)</li>
+      <li>2 tbsp coconut aminos or low-sodium soy sauce</li>
+      <li>1 tsp sesame oil, 1 tsp gochujang (or red chili flakes)</li>
+      <li>1 tsp garlic, 1 tsp ginger, allulose to taste (replaces sugar)</li>
+      <li>Base: shredded cabbage + sliced cucumber</li>
+      <li>Topping: sesame seeds + scallions</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Brown ground beef in a skillet. Drain excess fat.</li>
+      <li>Mix sauce ingredients. Pour over beef and simmer 3 minutes.</li>
+      <li>Serve over cabbage and cucumber slaw, top with sesame seeds and scallions.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">8</span>Chicken Lettuce Wraps (PF Chang's Style)</div>
+    <div class="badge-row"><span class="badge badge-cal">~360 cal / serving</span><span class="badge badge-protein">~36g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>10 oz ground chicken</li>
+      <li>½ cup water chestnuts, diced (canned, drained)</li>
+      <li>2 tbsp hoisin sauce (use sparingly — contains some sugar)</li>
+      <li>1 tbsp coconut aminos, 1 tsp sesame oil</li>
+      <li>2 garlic cloves, 1 tsp ginger</li>
+      <li>Romaine or butter lettuce cups to serve</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Brown ground chicken with garlic and ginger.</li>
+      <li>Add water chestnuts and all sauces. Cook 3 minutes.</li>
+      <li>Spoon into lettuce cups. Top with scallions and serve immediately.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">9</span>Zucchini Noodle Shrimp Scampi</div>
+    <div class="badge-row"><span class="badge badge-cal">~380 cal / serving</span><span class="badge badge-protein">~37g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>½ lb large shrimp, peeled and deveined</li>
+      <li>2 medium zucchini, spiralized or peeled into ribbons</li>
+      <li>3 garlic cloves, sliced thin</li>
+      <li>1 tbsp butter + 1 tsp avocado oil</li>
+      <li>¼ cup dry white wine or chicken broth</li>
+      <li>Lemon juice, red pepper flakes, fresh parsley, salt and pepper</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Sauté garlic in butter and oil for 1 minute over medium heat.</li>
+      <li>Add shrimp and cook until pink, about 3 minutes. Remove shrimp.</li>
+      <li>Deglaze pan with wine or broth. Add lemon juice and red pepper flakes.</li>
+      <li>Add zucchini noodles for 1–2 minutes only (they release water fast — don't overcook).</li>
+      <li>Return shrimp to pan. Toss, plate, and top with parsley.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-num">10</span>Baked Chicken Thighs with Roasted Cauliflower</div>
+    <div class="badge-row"><span class="badge badge-cal">~470 cal / serving</span><span class="badge badge-protein">~44g protein</span><span class="badge badge-servings">2 servings</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>2 bone-in, skin-on chicken thighs (or 3 boneless skinless)</li>
+      <li>1 tsp each: smoked paprika, garlic powder, onion powder, dried oregano, salt</li>
+      <li>1 tsp avocado oil</li>
+      <li>1 small head cauliflower, cut into florets</li>
+      <li>Side sauce: 2 tbsp Greek yogurt + lemon + garlic + za'atar (or tahini)</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Rub chicken with oil and the full spice blend.</li>
+      <li>Roast at 425°F for 35 minutes total.</li>
+      <li>After 10 minutes, add cauliflower to the same pan with oil and salt.</li>
+      <li>Rest 5 minutes before serving. Serve with yogurt dipping sauce.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ==================== SNACKS ==================== -->
+<div id="snacks" class="section">
+  <div class="section-intro">All snacks are ~120–200 cal. On home days, one snack fits between lunch and dinner. On class days, you may have two snacks — make the evening one protein-forward to hit your 100g goal.</div>
+
+  <div class="card">
+    <div class="card-title">Apple or Pear with Almond Butter</div>
+    <div class="badge-row"><span class="badge badge-cal">~190 cal</span><span class="badge badge-protein">~4g protein</span></div>
+    <div class="body-text">1 medium apple or pear + 1.5 tbsp almond butter. Keep almond butter to 1.5 tbsp to stay around 190 cal (2 tbsp = ~220). Slice the fruit and dip.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Grapes + Amul Cheese + Simple Mills Crackers</div>
+    <div class="badge-row"><span class="badge badge-cal">~200 cal</span><span class="badge badge-protein">~6g protein</span></div>
+    <div class="body-text">~15 green grapes + 1 Amul cube (or 1 oz sharp white cheddar) + 5 Simple Mills almond crackers. Portion the crackers carefully — the serving on the box is 17 crackers (~140 cal), so 5 is about 40 cal. This snack is very satisfying for how few calories it uses.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Cucumber + Labneh Dip</div>
+    <div class="badge-row"><span class="badge badge-cal">~120 cal</span><span class="badge badge-protein">~8g protein</span></div>
+    <div class="body-text">1 cup cucumber slices + 3 tbsp labneh (or Greek yogurt) seasoned with za'atar, salt, and a squeeze of lemon. Low calorie, high in protein relative to calories. Good second snack on class days.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Hard-Boiled Eggs</div>
+    <div class="badge-row"><span class="badge badge-cal">~140 cal</span><span class="badge badge-protein">~12g protein</span></div>
+    <div class="body-text">2 hard-boiled eggs + a pinch of everything bagel seasoning or a dash of hot sauce. Batch cook 6–8 eggs at the start of the week. The most efficient protein-per-calorie snack in the guide.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Frozen Banana Bites with Dark Chocolate</div>
+    <div class="badge-row"><span class="badge badge-cal">~140 cal / serving (6 bites)</span><span class="badge badge-protein">~2g protein</span><span class="badge badge-tip">Sweet treat — your banana + chocolate craving</span></div>
+    <div class="recipe-label">Ingredients</div>
+    <ul class="ingr">
+      <li>1 banana, sliced into rounds (~12 pieces)</li>
+      <li>1 oz 85%+ dark chocolate, melted</li>
+      <li>Optional: flaky sea salt, crushed almond</li>
+    </ul>
+    <div class="recipe-label">Steps</div>
+    <ol class="steps">
+      <li>Melt dark chocolate in the microwave in 20-second intervals, stirring each time.</li>
+      <li>Dip banana rounds halfway into chocolate. Place on parchment paper.</li>
+      <li>Sprinkle with sea salt if desired. Freeze at least 1 hour.</li>
+      <li>Store in freezer in a zip bag. One serving = 6 bites.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Greek Yogurt Cup (Evening Protein Boost)</div>
+    <div class="badge-row"><span class="badge badge-cal">~200 cal</span><span class="badge badge-protein">~20g protein</span><span class="badge badge-tip">Best evening snack on class days</span></div>
+    <div class="body-text">1 cup plain 2% Greek yogurt + ½ cup berries + drizzle of allulose. This is the key snack for hitting your 100g protein target on class days when breakfast was light (just gummies).</div>
+  </div>
+</div>
+
+<!-- ==================== DAY PLANS ==================== -->
+<div id="dayplans" class="section">
+  <div class="section-intro">These are suggested combinations — mix and match any recipes from each category. The goal is to stay within ~1,400–1,550 cal and hit ~95–110g protein for the day.</div>
+
+  <div class="day-header">🏠 Home Day (Mon / Wed / Fri)</div>
+  <div class="body-text" style="margin-bottom:12px;">Structure: Breakfast + Lunch + Snack + Dinner</div>
+  <div class="meal-block">
+    <div class="meal-block-title">Breakfast — target ~350–380 cal, ~25g+ protein</div>
+    <div class="meal-row"><span>Greek yogurt parfait</span><span>320 cal / 26g protein</span></div>
+    <div class="meal-row"><span>Egg muffins (3 cups)</span><span>310 cal / 26g protein</span></div>
+    <div class="meal-row"><span>Egg &amp; smoked salmon scramble</span><span>380 cal / 32g protein</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Lunch — target ~320–420 cal, ~35g+ protein</div>
+    <div class="meal-row"><span>Broth soup + shredded chicken</span><span>320 cal / 35g protein</span></div>
+    <div class="meal-row"><span>Chicken lettuce wrap bowl</span><span>360 cal / 36g protein</span></div>
+    <div class="meal-row"><span>Lemon herb cod + greens</span><span>350 cal / 40g protein</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Snack — target ~150–200 cal</div>
+    <div class="meal-row"><span>Apple + almond butter</span><span>190 cal / 4g protein</span></div>
+    <div class="meal-row"><span>Grapes + cheese + 5 crackers</span><span>200 cal / 6g protein</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Dinner — target ~450–500 cal, ~38–44g protein</div>
+    <div class="meal-row"><span>Chicken tikka (no rice)</span><span>410 cal / 42g protein</span></div>
+    <div class="meal-row"><span>Baked chicken thighs + cauliflower</span><span>470 cal / 44g protein</span></div>
+    <div class="meal-row"><span>Korean ground beef bowl</span><span>450 cal / 38g protein</span></div>
+  </div>
+  <div class="macro-grid">
+    <div class="macro-box"><div class="macro-val">~1,470</div><div class="macro-label">total cal</div></div>
+    <div class="macro-box"><div class="macro-val">~103g</div><div class="macro-label">protein</div></div>
+    <div class="macro-box"><div class="macro-val">4 meals</div><div class="macro-label">structure</div></div>
+  </div>
+
+  <hr class="soft">
+
+  <div class="day-header">🎒 Class Day</div>
+  <div class="body-text" style="margin-bottom:12px;">Structure: Gummy (before leaving) + Snack + Dinner + Evening Snack</div>
+  <div class="meal-block">
+    <div class="meal-block-title">Before class — ~90 cal, ~8g protein</div>
+    <div class="meal-row"><span>5 gummies (any flavor)</span><span>~90 cal / 8g protein</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Snack 1 (between classes) — ~190–200 cal</div>
+    <div class="meal-row"><span>Apple + almond butter</span><span>190 cal</span></div>
+    <div class="meal-row"><span>Grapes + cheese + 5 crackers</span><span>200 cal</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Dinner (slightly larger on class days) — ~420–500 cal, ~38–44g protein</div>
+    <div class="meal-row"><span>Salmon + roasted veggies</span><span>420 cal / 36g protein</span></div>
+    <div class="meal-row"><span>Shrimp stir-fry</span><span>380 cal / 38g protein</span></div>
+    <div class="meal-row"><span>Turkey taco bowl</span><span>440 cal / 40g protein</span></div>
+  </div>
+  <div class="meal-block">
+    <div class="meal-block-title">Snack 2 (evening — make this protein-forward) — ~200–260 cal, ~20g protein</div>
+    <div class="meal-row"><span>Greek yogurt + berries</span><span>200 cal / 20g protein</span></div>
+    <div class="meal-row"><span>Cottage cheese + fruit</span><span>220 cal / 20g protein</span></div>
+    <div class="meal-row"><span>2 hard-boiled eggs + cucumber dip</span><span>260 cal / 20g protein</span></div>
+  </div>
+  <div class="warn-note">⚠️ Class day protein will sit lower (~75–90g) unless the evening snack is protein-forward. Greek yogurt or cottage cheese in the evening is the fix — don't skip it.</div>
+  <div class="macro-grid" style="margin-top:12px;">
+    <div class="macro-box"><div class="macro-val">~1,350</div><div class="macro-label">base cal</div></div>
+    <div class="macro-box"><div class="macro-val">~86–95g</div><div class="macro-label">protein</div></div>
+    <div class="macro-box"><div class="macro-val">4 meals</div><div class="macro-label">structure</div></div>
+  </div>
+</div>
+
+<!-- ==================== EATING OUT ==================== -->
+<div id="eatingout" class="section">
+  <div class="section-intro">General rules: ask for sauces on the side, skip the starch (rice, bread, tortillas, noodles unless they're vegetable-based), and always anchor the meal around a grilled or baked protein.</div>
+
+  <div class="card">
+    <div class="cuisine-name">🇮🇳 Indian / Pakistani</div>
+    <div class="order-item">Tandoori chicken or seekh kebabs — protein-heavy, minimal sauce</div>
+    <div class="order-item">Chicken tikka dry (ask for sauce on the side, or skip it)</div>
+    <div class="order-item">Dal (lentil soup) — good fiber and protein, watch portion size</div>
+    <div class="order-item">Raita as a side instead of naan</div>
+    <div class="order-item">Boti kabab, reshmi kabab, or any grilled skewer dish</div>
+    <div class="avoid-line">⚠️ Avoid: naan, rice, samosas, korma and butter chicken (very high cream), biryani</div>
+  </div>
+
+  <div class="card">
+    <div class="cuisine-name">🌮 Mexican / Tex-Mex</div>
+    <div class="order-item">Protein bowl — chicken, shrimp, or steak over lettuce + pico + guac, no rice or beans</div>
+    <div class="order-item">Fajitas — eat the protein and peppers/onions as a bowl, skip tortillas</div>
+    <div class="order-item">Ceviche — naturally low carb, high protein, very light</div>
+    <div class="order-item">Guacamole with veggie dippers instead of chips (ask for cucumber or jicama)</div>
+    <div class="avoid-line">⚠️ Avoid: tortillas, chips (unlimited chips = easy 400+ extra calories), rice, tamales, churros</div>
+  </div>
+
+  <div class="card">
+    <div class="cuisine-name">🇯🇵 Japanese</div>
+    <div class="order-item">Sashimi (salmon, tuna, yellowtail) — pure protein, zero rice</div>
+    <div class="order-item">Edamame + miso soup as starters (filling, low cal)</div>
+    <div class="order-item">Yakitori — grilled chicken skewers, ask for tare sauce on the side</div>
+    <div class="order-item">Chirashi bowl — request less rice or a side salad substitution</div>
+    <div class="order-item">Agedashi tofu (lightly fried, lighter than most options)</div>
+    <div class="avoid-line">⚠️ Avoid: tempura, fried gyoza, ramen (high carb + sodium), sushi rolls (rice-heavy)</div>
+  </div>
+
+  <div class="card">
+    <div class="cuisine-name">🇰🇷 Korean</div>
+    <div class="order-item">Mul-naengmyeon — cold broth noodle soup, very light overall</div>
+    <div class="order-item">Bulgogi lettuce wraps — skip the rice, wrap in lettuce</div>
+    <div class="order-item">Doenjang jjigae (soybean paste soup with tofu and veggies)</div>
+    <div class="order-item">Sundubu jjigae (soft tofu stew, protein-rich)</div>
+    <div class="order-item">Banchan (small side dishes) — most are vegetable-based and low cal</div>
+    <div class="avoid-line">⚠️ Avoid: Korean fried chicken (unless a planned treat), bibimbap with rice, japchae (glass noodles)</div>
+  </div>
+
+  <div class="card">
+    <div class="cuisine-name">🍔 American / Fast Casual</div>
+    <div class="order-item">Chipotle bowl: chicken or steak + fajita veggies + salsa + guac + lettuce — NO rice, NO beans</div>
+    <div class="order-item">Grilled chicken sandwich — ditch the bun, eat the protein and toppings as a plate</div>
+    <div class="order-item">Brunch omelets or scrambles — ask for extra veggies in place of toast or home fries</div>
+    <div class="order-item">Side salad with grilled protein — dressing on the side (use half)</div>
+    <div class="avoid-line">⚠️ Avoid: fries, burger buns, creamy dressings in large amounts, milkshakes, pasta bowls</div>
+  </div>
+
+  <div class="card">
+    <div class="cuisine-name">🧆 Mediterranean / Middle Eastern</div>
+    <div class="order-item">Grilled kebabs (lamb kofta, chicken, shish tawook) with a fattoush or tabbouleh salad</div>
+    <div class="order-item">Hummus with raw veggies (not pita) as a starter</div>
+    <div class="order-item">Grilled fish with charmoula or lemon-herb dressing</div>
+    <div class="order-item">Shakshuka (eggs poached in spiced tomato sauce) — very filling, often available at brunch</div>
+    <div class="order-item">Labneh with cucumber and olives as a side</div>
+    <div class="avoid-line">⚠️ Avoid: pita, lavash, rice pilaf, baklava, knafeh</div>
+  </div>
+</div>
+
+</main>
+
+<script>
+function show(sectionId, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(sectionId).classList.add('active');
+  btn.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
