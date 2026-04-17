@@ -769,6 +769,11 @@ const S = {
   pickerQ:      '',
   // Auth
   authTab:    'login',
+  // Restaurant search
+  restLoading:  false,
+  restResults:  null,   // { restaurant, matches, better }
+  restExpanded: {},
+  restBetterExp:{},
 };
 
 let sb; // Supabase client
@@ -1131,6 +1136,88 @@ async function saveAiRecipe(i) {
 }
 
 function toggleAiExpand(i) { S.aiExpanded[i] = !S.aiExpanded[i]; rAddDish(); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AI — RESTAURANT MENU SEARCH
+══════════════════════════════════════════════════════════════════════════ */
+async function restaurantSearch() {
+  const query = document.getElementById('ai-dish')?.value?.trim();
+  const cat   = document.getElementById('ai-cat')?.value;
+  if (!query) { toast('Enter a restaurant or dish name first', 'error'); return; }
+  S.aiDish = query; S.aiCat = cat;
+  S.restLoading = true; S.restResults = null; S.restExpanded = {}; S.restBetterExp = {};
+  rAddDish();
+  try {
+    const res  = await fetch('/api/restaurant-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query, category: cat,
+        userMacros: S.profile
+          ? { calories: S.profile.daily_calories, protein_g: S.profile.daily_protein_g,
+              carbs_g: S.profile.daily_carbs_g,   fat_g: S.profile.daily_fat_g }
+          : null
+      })
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    S.restResults = json;
+    if (!json.matches?.length && !json.better?.length)
+      toast('No results — try being more specific (e.g. "Chipotle chicken bowl")', 'info');
+  } catch(e) {
+    toast('Restaurant search failed: ' + e.message, 'error');
+  } finally {
+    S.restLoading = false; rAddDish();
+  }
+}
+
+async function saveRestItem(item, isBetter) {
+  const key = (isBetter ? 'b' : 'm') + JSON.stringify(item.name);
+  const saved = await addDish({
+    name:         item.name,
+    category:     item.category || S.aiCat || 'lunch_dinner',
+    calories:     item.calories,
+    protein_g:    item.protein_g,
+    carbs_g:      item.carbs_g,
+    fat_g:        item.fat_g,
+    servings:     item.servings || 1,
+    ingredients:  [],
+    instructions: [],
+    notes:        item.notes || (isBetter ? item.why : '') || '',
+    source:       'restaurant'
+  });
+  if (saved) {
+    if (isBetter) S.restBetterExp['saved_'+key] = true;
+    else          S.restExpanded['saved_'+key]   = true;
+    item._saved = true;
+    rAddDish();
+  }
+}
+
+function restItemHTML(item, idx, isBetter) {
+  const key = idx + (isBetter ? '_b' : '_m');
+  return `
+    <div class="ai-card" style="${isBetter ? 'border-left:3px solid var(--sage);' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div class="ai-card-name">${item.name}</div>
+          <div class="badge-row">
+            <span class="badge b-cal">${item.calories} cal</span>
+            <span class="badge b-pro">${item.protein_g}g pro</span>
+            <span class="badge b-carb">${item.carbs_g}g carbs</span>
+            <span class="badge b-fat">${item.fat_g}g fat</span>
+          </div>
+          ${isBetter && item.why ? `<div style="font-size:.79rem;color:var(--sage);margin-top:5px;font-weight:500;">✅ ${item.why}</div>` : ''}
+          ${item.notes ? `<div style="font-size:.79rem;color:var(--text-md);margin-top:3px;">💡 ${item.notes}</div>` : ''}
+        </div>
+        <div style="flex-shrink:0;">
+          ${item._saved
+            ? `<span class="badge b-ok" style="text-align:center;padding:7px 10px;">✓ Saved</span>`
+            : `<button class="btn btn-caramel btn-sm" onclick="saveRestItem(S.restResults.${isBetter?'better':'matches'}[${idx}], ${isBetter})">+ Add</button>`}
+        </div>
+      </div>
+    </div>`;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    PICKER MODAL
@@ -1588,17 +1675,19 @@ function rLibrary() {
 ══════════════════════════════════════════════════════════════════════════ */
 function rAddDish() {
   const el = document.getElementById('view-add-dish');
-  let results = '';
+  let recipeResults = '';
+  let restResultsHTML = '';
 
+  // ── Recipe results ──────────────────────────────────────────────────────────
   if (S.aiLoading) {
-    results = `
+    recipeResults = `
       <div class="card glass loader-wrap" style="margin-top:18px;">
         <div class="loader"></div>
         <div class="loader-txt">Claude is crafting 5 tailored recipes for you…</div>
         <div class="loader-sub">Analysing your macro profile and nutrition goals</div>
       </div>`;
   } else if (S.aiRecipes.length) {
-    results = `
+    recipeResults = `
       <div style="margin-top:22px;">
         <h2 style="font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--espresso);margin-bottom:3px;">
           5 Recipes for "${S.aiDish}"
@@ -1640,15 +1729,57 @@ function rAddDish() {
       </div>`;
   }
 
+  // ── Restaurant results ──────────────────────────────────────────────────────
+  if (S.restLoading) {
+    restResultsHTML = `
+      <div class="card glass loader-wrap" style="margin-top:18px;">
+        <div class="loader"></div>
+        <div class="loader-txt">Searching restaurant menus…</div>
+        <div class="loader-sub">Finding real menu items and smarter alternatives for your goals</div>
+      </div>`;
+  } else if (S.restResults) {
+    const r = S.restResults;
+    const matchesSection = r.matches?.length ? `
+      <div style="margin-top:22px;">
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--espresso);margin-bottom:3px;">
+          📍 Menu Matches — ${r.restaurant || 'Restaurant'}
+        </h2>
+        <p style="font-size:.82rem;color:var(--text-mu);margin-bottom:14px;">
+          Real menu items matching your search. Add any to your library.
+        </p>
+        ${r.matches.map((item, i) => restItemHTML(item, i, false)).join('')}
+      </div>` : '';
+
+    const betterSection = r.better?.length ? `
+      <div style="margin-top:22px;">
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--sage);margin-bottom:3px;">
+          ✅ Better Choices — ${r.restaurant || 'Restaurant'}
+        </h2>
+        <p style="font-size:.82rem;color:var(--text-mu);margin-bottom:14px;">
+          AI-recommended alternatives from the same restaurant that better fit your protein and macro goals.
+        </p>
+        ${r.better.map((item, i) => restItemHTML(item, i, true)).join('')}
+      </div>` : '';
+
+    restResultsHTML = matchesSection + betterSection;
+
+    if (!matchesSection && !betterSection) {
+      restResultsHTML = `
+        <div class="disc disc-warn" style="margin-top:18px;">
+          ⚠️ <span>No results found. Try being more specific — e.g. "Chipotle chicken bowl" or "McDonald's breakfast".</span>
+        </div>`;
+    }
+  }
+
   el.innerHTML = `
     <h1 class="pg-title">Add Dish with AI</h1>
-    <p class="pg-sub">Enter any dish name — Claude suggests 5 high-protein recipes matched to your macro targets.</p>
+    <p class="pg-sub">Search for recipes or look up real restaurant menu items — all matched to your macro targets.</p>
 
     <div class="card glass">
       <div class="form-group">
-        <label class="form-label">Dish Name</label>
+        <label class="form-label">Dish or Restaurant</label>
         <input id="ai-dish" type="text" class="form-input"
-               placeholder="e.g. Chicken Caesar Salad, Acai Bowl, Protein Pancakes…"
+               placeholder="e.g. Chipotle, McDonald's Big Mac, Acai Bowl, Protein Pancakes…"
                value="${S.aiDish}"
                onkeydown="if(event.key==='Enter')aiSearch()">
       </div>
@@ -1676,9 +1807,15 @@ function rAddDish() {
               onclick="aiSearch()" ${S.aiLoading?'disabled':''}>
         ${S.aiLoading ? '⏳ Searching…' : '✨ Find 5 Recipes with Claude AI'}
       </button>
+
+      <button class="btn btn-full" style="margin-top:10px;background:linear-gradient(135deg,#3d7a5c,#2e5e46);color:#fff;"
+              onclick="restaurantSearch()" ${S.restLoading?'disabled':''}>
+        ${S.restLoading ? '⏳ Searching menus…' : '🍽️ Find Restaurant Menu Items'}
+      </button>
     </div>
 
-    ${results}
+    ${recipeResults}
+    ${restResultsHTML}
   `;
 }
 

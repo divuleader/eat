@@ -159,6 +159,102 @@ Each element must contain exactly these keys:
   }
 });
 
+// ── Restaurant Menu Search ────────────────────────────────────────────────────
+app.post('/api/restaurant-search', async (req, res) => {
+  const { query, category, userMacros } = req.body;
+  if (!query) return res.status(400).json({ error: 'query is required.' });
+
+  const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+  if (!CLAUDE_API_KEY) return res.status(500).json({ error: 'CLAUDE_API_KEY not configured.' });
+
+  const macroContext = userMacros
+    ? `The user's daily targets are ${userMacros.calories} cal | ${userMacros.protein_g}g protein | ${userMacros.carbs_g}g carbs | ${userMacros.fat_g}g fat. Size items as an appropriate fraction of those totals.`
+    : `The user is focused on high protein (≥25g per main meal, ≥8g per snack) and low starchy carbs.`;
+
+  const prompt = `You are a nutrition expert with deep knowledge of restaurant menus and their nutritional content.
+
+The user is searching for: "${query}"
+Meal category: ${category || 'any'}
+${macroContext}
+
+Your task:
+1. Identify the restaurant from the query (it may be just a restaurant name like "Chipotle", or a specific dish like "McDonald's Big Mac", or "Starbucks breakfast").
+2. Return real menu items that match or are closely related to the search.
+3. Return better alternatives from the SAME restaurant that are more aligned with the user's high-protein, lower-carb goals.
+
+Use your knowledge of real published nutritional data from these restaurants. Be accurate with calories and macros.
+
+Return ONLY valid JSON in this exact shape — no markdown, no commentary:
+{
+  "restaurant": "Restaurant Name",
+  "matches": [
+    {
+      "name": "Exact menu item name",
+      "calories": <integer>,
+      "protein_g": <number>,
+      "carbs_g": <number>,
+      "fat_g": <number>,
+      "servings": 1,
+      "category": "${category || 'lunch_dinner'}",
+      "notes": "Brief nutrition note"
+    }
+  ],
+  "better": [
+    {
+      "name": "Better menu item name",
+      "calories": <integer>,
+      "protein_g": <number>,
+      "carbs_g": <number>,
+      "fat_g": <number>,
+      "servings": 1,
+      "category": "${category || 'lunch_dinner'}",
+      "why": "One sentence on why this is a better choice for the user's goals",
+      "notes": "Brief nutrition note"
+    }
+  ]
+}
+
+Return 3–5 matches and 3–5 better alternatives. If the restaurant is not found or the query is ambiguous, make your best inference.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Claude API error:', errText);
+      return res.status(502).json({ error: 'Claude API returned an error.' });
+    }
+
+    const data    = await response.json();
+    const content = data.content?.[0]?.text || '{}';
+
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      result = match ? JSON.parse(match[0]) : { matches: [], better: [] };
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Restaurant search error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // ── SPA fallback (all other routes → index) ──────────────────────────────────
 app.get('*', (req, res) => {
   const templatePath = path.join(__dirname, 'public', 'index.html');
