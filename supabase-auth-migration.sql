@@ -21,14 +21,15 @@ CREATE TABLE profiles (
   weight_lbs     NUMERIC(6,1),
   height_ft      INTEGER,
   height_in      INTEGER,
-  activity_level TEXT    CHECK (activity_level IN ('sedentary','light','moderate','active','very_active')),
-  goal           TEXT    CHECK (goal IN ('lose','maintain','gain')),
-  daily_calories INTEGER,
+  activity_level   TEXT    CHECK (activity_level IN ('sedentary','light','moderate','active','very_active')),
+  goal             TEXT,   -- comma-separated, e.g. 'lose,muscle' or 'maintain'
+  goal_weight_lbs  NUMERIC(6,1),
+  daily_calories   INTEGER,
   daily_protein_g  INTEGER,
   daily_carbs_g    INTEGER,
   daily_fat_g      INTEGER,
-  created_at     TIMESTAMPTZ DEFAULT NOW(),
-  updated_at     TIMESTAMPTZ DEFAULT NOW()
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;

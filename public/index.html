@@ -758,10 +758,22 @@ const S = {
   // Library
   catFilter:  'all',
   libSearch:  '',
-  // Profile toggles (held in state, not DOM)
-  pSex:       null,
-  pActivity:  null,
-  pGoal:      null,
+  // Profile form fields (all in state so re-renders from toggles never lose typed data)
+  pName:       '',
+  pAge:        '',
+  pWeight:     '',
+  pHeightFt:   '',
+  pHeightIn:   '0',
+  pGoalWeight: '',
+  // Profile toggles
+  pSex:        null,
+  pActivity:   null,
+  pGoals:      [],   // array — e.g. ['lose','muscle'] or ['maintain']
+  // Editable macro targets (empty = auto-calculate on save)
+  pCalTarget:  '',
+  pProTarget:  '',
+  pCarbTarget: '',
+  pFatTarget:  '',
   // Picker
   pickerSlot:   null,
   pickerDish:   null,
@@ -795,7 +807,12 @@ async function init() {
 
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Listen for auth state changes (handles session restore on page load)
+  // Show auth screen immediately while session is checked
+  showAuthScreen();
+
+  // onAuthStateChange fires once with INITIAL_SESSION on load — handles both
+  // the "returning user" case and sign-in/sign-out transitions.
+  // We deliberately do NOT call getSession() separately to avoid a double loadApp race.
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
       S.user = session.user;
@@ -805,15 +822,6 @@ async function init() {
       showAuthScreen();
     }
   });
-
-  // Check for existing session
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.user) {
-    S.user = session.user;
-    await loadApp();
-  } else {
-    showAuthScreen();
-  }
 }
 
 async function loadApp() {
@@ -971,25 +979,54 @@ function render() {
 async function loadProfile() {
   const { data } = await sb.from('profiles').select('*').eq('user_id', S.user.id).maybeSingle();
   S.profile = data;
-  if (data) { S.pSex = data.sex; S.pActivity = data.activity_level; S.pGoal = data.goal; }
+  if (data) {
+    S.pSex        = data.sex;
+    S.pActivity   = data.activity_level;
+    S.pGoals      = (data.goal||'').split(',').filter(Boolean);
+    S.pName       = data.name        || '';
+    S.pAge        = data.age         ? String(data.age)         : '';
+    S.pWeight     = data.weight_lbs  ? String(data.weight_lbs)  : '';
+    S.pHeightFt   = data.height_ft   ? String(data.height_ft)   : '';
+    S.pHeightIn   = data.height_in   != null ? String(data.height_in) : '0';
+    S.pGoalWeight = data.goal_weight_lbs ? String(data.goal_weight_lbs) : '';
+    S.pCalTarget  = data.daily_calories  ? String(data.daily_calories)  : '';
+    S.pProTarget  = data.daily_protein_g ? String(data.daily_protein_g) : '';
+    S.pCarbTarget = data.daily_carbs_g   ? String(data.daily_carbs_g)   : '';
+    S.pFatTarget  = data.daily_fat_g     ? String(data.daily_fat_g)     : '';
+  }
 }
 
 async function saveProfile() {
-  const v = id => document.getElementById(id)?.value?.trim();
   const fd = {
-    name:           v('p-name') || '',
-    age:            parseInt(v('p-age'))    || null,
-    sex:            S.pSex,
-    weight_lbs:     parseFloat(v('p-wt'))  || null,
-    height_ft:      parseInt(v('p-hft'))   || null,
-    height_in:      parseInt(v('p-hin'))   || 0,
-    activity_level: S.pActivity,
-    goal:           S.pGoal,
+    name:            S.pName.trim() || '',
+    age:             parseInt(S.pAge)      || null,
+    sex:             S.pSex,
+    weight_lbs:      parseFloat(S.pWeight) || null,
+    height_ft:       parseInt(S.pHeightFt) || null,
+    height_in:       parseInt(S.pHeightIn) || 0,
+    activity_level:  S.pActivity,
+    goal:            S.pGoals.join(','),
+    goal_weight_lbs: parseFloat(S.pGoalWeight) || null,
   };
-  if (!fd.age || !fd.sex || !fd.weight_lbs || !fd.height_ft || !fd.activity_level || !fd.goal) {
-    toast('Please complete all fields', 'error'); return;
+  if (!fd.age || !fd.sex || !fd.weight_lbs || !fd.height_ft || !fd.activity_level || !S.pGoals.length) {
+    toast('Please complete all fields (name, age, sex, weight, height, activity, goal)', 'error'); return;
   }
-  const macros = calcMacros(fd);
+  // Use custom macros if all 4 are provided; otherwise auto-calculate
+  const cCal  = parseInt(S.pCalTarget);
+  const cPro  = parseInt(S.pProTarget);
+  const cCarb = parseInt(S.pCarbTarget);
+  const cFat  = parseInt(S.pFatTarget);
+  let macros;
+  if (cCal > 0 && cPro > 0 && cCarb >= 0 && cFat > 0) {
+    macros = { daily_calories: cCal, daily_protein_g: cPro, daily_carbs_g: cCarb, daily_fat_g: cFat };
+  } else {
+    macros = calcMacros(fd);
+    // Back-fill state so the form shows what was calculated
+    S.pCalTarget  = String(macros.daily_calories);
+    S.pProTarget  = String(macros.daily_protein_g);
+    S.pCarbTarget = String(macros.daily_carbs_g);
+    S.pFatTarget  = String(macros.daily_fat_g);
+  }
   const payload = { ...fd, ...macros, user_id: S.user.id, updated_at: new Date().toISOString() };
   let r;
   if (S.profile?.id) {
@@ -1004,6 +1041,11 @@ async function saveProfile() {
 }
 
 function calcMacros(p) {
+  const goals    = (p.goal || '').split(',').filter(Boolean);
+  const hasLose  = goals.includes('lose');
+  const hasGain  = goals.includes('gain');
+  const hasMuscle= goals.includes('muscle');
+
   const wKg  = p.weight_lbs * 0.453592;
   const hCm  = ((p.height_ft||0)*12 + (p.height_in||0)) * 2.54;
   const bmr  = p.sex==='male'
@@ -1011,8 +1053,11 @@ function calcMacros(p) {
     : 10*wKg + 6.25*hCm - 5*p.age - 161;
   const mult = {sedentary:1.2,light:1.375,moderate:1.55,active:1.725,very_active:1.9};
   const tdee = bmr * (mult[p.activity_level]||1.55);
-  const cal  = Math.round(p.goal==='lose' ? tdee*.80 : p.goal==='gain' ? tdee+300 : tdee);
-  const pro  = Math.round(p.weight_lbs * (p.goal==='gain'?1.2 : p.goal==='lose'?1.0 : 0.8));
+  const cal  = Math.round(hasLose ? tdee*0.80 : hasGain ? tdee+300 : tdee);
+  // Build Muscle boosts protein to at least 1.0g/lb (gain already uses 1.2g)
+  let proMult = hasGain ? 1.2 : hasLose ? 1.0 : 0.8;
+  if (hasMuscle) proMult = Math.max(proMult, 1.0);
+  const pro  = Math.round(p.weight_lbs * proMult);
   const fat  = Math.round((cal*.30)/9);
   const carb = Math.max(0, Math.round((cal - pro*4 - fat*9)/4));
   return { daily_calories:cal, daily_protein_g:pro, daily_carbs_g:carb, daily_fat_g:fat };
@@ -1022,7 +1067,10 @@ function calcMacros(p) {
    SUPABASE — DISHES
 ══════════════════════════════════════════════════════════════════════════ */
 async function loadDishes() {
-  const { data, error } = await sb.from('dishes').select('*').order('name');
+  // Return global seed dishes (user_id IS NULL) plus the logged-in user's own dishes
+  const { data, error } = await sb.from('dishes').select('*')
+    .or(`user_id.is.null,user_id.eq.${S.user.id}`)
+    .order('name');
   if (error) throw error;
   S.dishes = data || [];
 }
@@ -1500,32 +1548,44 @@ function rDash() {
 ══════════════════════════════════════════════════════════════════════════ */
 function profileFormHTML(p) {
   const acts = [
-    {k:'sedentary',   ic:'🛋️',  l:'Sedentary',  s:'Little/no exercise'},
-    {k:'light',       ic:'🚶',  l:'Light',       s:'1–3 days/wk'},
-    {k:'moderate',    ic:'🏃',  l:'Moderate',    s:'3–5 days/wk'},
-    {k:'active',      ic:'💪',  l:'Active',      s:'6–7 days/wk'},
-    {k:'very_active', ic:'🏋️',  l:'Very Active', s:'Twice daily'},
+    {k:'sedentary',   ic:'🛋️', l:'Sedentary',  s:'Little/no exercise'},
+    {k:'light',       ic:'🚶', l:'Light',       s:'1–3 days/wk'},
+    {k:'moderate',    ic:'🏃', l:'Moderate',    s:'3–5 days/wk'},
+    {k:'active',      ic:'💪', l:'Active',      s:'6–7 days/wk'},
+    {k:'very_active', ic:'🏋️', l:'Very Active', s:'Twice daily'},
   ];
   const goals = [
-    {k:'lose',     ic:'📉',  l:'Lose Weight',   s:'~20% deficit'},
-    {k:'maintain', ic:'⚖️',  l:'Maintain',      s:'TDEE calories'},
-    {k:'gain',     ic:'📈',  l:'Build Muscle',  s:'+300 cal surplus'},
+    {k:'lose',     ic:'📉', l:'Lose Weight',  s:'~20% deficit'},
+    {k:'maintain', ic:'⚖️', l:'Maintain',     s:'TDEE calories'},
+    {k:'gain',     ic:'📈', l:'Gain Weight',  s:'+300 cal surplus'},
+    {k:'muscle',   ic:'💪', l:'Build Muscle', s:'High protein target'},
   ];
+
+  // Recommended goal weight from current height state
+  const totalIn = (parseInt(S.pHeightFt)||0)*12 + (parseInt(S.pHeightIn)||0);
+  const recW = totalIn > 0 ? (() => {
+    const hm = totalIn * 0.0254, h2 = hm * hm;
+    return { ideal: Math.round(22*h2*2.20462), min: Math.round(18.5*h2*2.20462), max: Math.round(24.9*h2*2.20462) };
+  })() : null;
+
   return `
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Your Name</label>
-        <input id="p-name" type="text" class="form-input" placeholder="e.g. Alex" value="${p?.name||''}">
+        <input type="text" class="form-input" placeholder="e.g. Alex"
+               value="${S.pName}" oninput="S.pName=this.value">
       </div>
       <div class="form-group">
         <label class="form-label">Age</label>
-        <input id="p-age" type="number" class="form-input" placeholder="e.g. 28" min="15" max="100" value="${p?.age||''}">
+        <input type="number" class="form-input" placeholder="e.g. 28" min="15" max="100"
+               value="${S.pAge}" oninput="S.pAge=this.value">
       </div>
     </div>
+
     <div class="form-group">
       <label class="form-label">Biological Sex</label>
       <div class="tog-group">
-        <div class="tog-opt ${S.pSex==='male'?'sel':''}"   onclick="setSex('male')">
+        <div class="tog-opt ${S.pSex==='male'  ?'sel':''}" onclick="setSex('male')">
           <span class="tog-icon">♂️</span><span class="tog-lbl">Male</span>
         </div>
         <div class="tog-opt ${S.pSex==='female'?'sel':''}" onclick="setSex('female')">
@@ -1533,19 +1593,41 @@ function profileFormHTML(p) {
         </div>
       </div>
     </div>
+
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Weight (lbs)</label>
-        <input id="p-wt" type="number" class="form-input" placeholder="e.g. 155" min="50" max="500" value="${p?.weight_lbs||''}">
+        <label class="form-label">Current Weight (lbs)</label>
+        <input type="number" class="form-input" placeholder="e.g. 155" min="50" max="500"
+               value="${S.pWeight}" oninput="S.pWeight=this.value">
       </div>
       <div class="form-group">
         <label class="form-label">Height</label>
         <div style="display:flex;gap:8px;">
-          <input id="p-hft" type="number" class="form-input" placeholder="ft" min="3" max="8" style="max-width:78px;" value="${p?.height_ft||''}">
-          <input id="p-hin" type="number" class="form-input" placeholder="in" min="0" max="11" style="max-width:78px;" value="${p?.height_in||''}">
+          <input type="number" class="form-input" placeholder="ft" min="3" max="8" style="max-width:78px;"
+                 value="${S.pHeightFt}" oninput="S.pHeightFt=this.value;updateGoalWeightRec()">
+          <input type="number" class="form-input" placeholder="in" min="0" max="11" style="max-width:78px;"
+                 value="${S.pHeightIn}" oninput="S.pHeightIn=this.value;updateGoalWeightRec()">
         </div>
       </div>
     </div>
+
+    <div class="form-group">
+      <label class="form-label">Goal Weight (lbs) <span style="font-size:.75rem;color:var(--text-lt);font-weight:400;">optional</span></label>
+      <div id="goal-weight-rec" style="font-size:.78rem;color:var(--text-lt);margin-bottom:6px;">
+        ${recW
+          ? `⚖️ Recommended: <strong>${recW.ideal} lbs</strong> · Healthy range: ${recW.min}–${recW.max} lbs (BMI 18.5–24.9)`
+          : 'Enter your height above to see a recommendation'}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" class="form-input" placeholder="${recW?.ideal||'e.g. 150'}" min="50" max="500" style="max-width:160px;"
+               value="${S.pGoalWeight}" oninput="S.pGoalWeight=this.value">
+        ${recW ? `<button class="btn btn-ghost btn-sm" type="button"
+                          onclick="S.pGoalWeight='${recW.ideal}';document.querySelector('[oninput*=pGoalWeight]').value='${recW.ideal}'">
+                    Use ${recW.ideal} lbs
+                  </button>` : ''}
+      </div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Activity Level</label>
       <div class="tog-group">
@@ -1559,17 +1641,91 @@ function profileFormHTML(p) {
         ${acts.find(a=>a.k===S.pActivity)?.s||''}
       </div>` : ''}
     </div>
+
     <div class="form-group">
-      <label class="form-label">Goal</label>
+      <label class="form-label">Goal <span style="font-size:.75rem;color:var(--text-lt);font-weight:400;">(select all that apply)</span></label>
       <div class="tog-group">
         ${goals.map(g => `
-          <div class="tog-opt ${S.pGoal===g.k?'sel':''}" onclick="setGoal('${g.k}')">
+          <div class="tog-opt ${S.pGoals.includes(g.k)?'sel':''}" onclick="toggleGoal('${g.k}')">
             <span class="tog-icon">${g.ic}</span>
             <span class="tog-lbl">${g.l}</span>
           </div>`).join('')}
       </div>
+      ${S.pGoals.includes('muscle') && S.pGoals.some(g=>['lose','maintain','gain'].includes(g)) ? `
+        <div style="font-size:.78rem;color:var(--sage);margin-top:6px;">
+          💪 Build Muscle combined: protein boosted to 1g / lb bodyweight
+        </div>` : ''}
+    </div>
+
+    <!-- ── Macro Targets ──────────────────────────────────────────────────── -->
+    <div style="margin-top:22px;padding-top:18px;border-top:1px solid rgba(139,115,85,.15);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <label class="form-label" style="margin:0;">Daily Macro Targets</label>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="recalcMacros()">↻ Recalculate from Stats</button>
+      </div>
+      <p style="font-size:.79rem;color:var(--text-lt);margin-bottom:12px;">
+        Auto-calculated from your stats. Edit any value to customise — your numbers will be saved as-is.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Calories / day</label>
+          <input type="number" class="form-input" placeholder="e.g. 2000" min="800" max="8000"
+                 value="${S.pCalTarget}" oninput="S.pCalTarget=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Protein (g)</label>
+          <input type="number" class="form-input" placeholder="e.g. 150" min="30" max="600"
+                 value="${S.pProTarget}" oninput="S.pProTarget=this.value">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Carbs (g)</label>
+          <input type="number" class="form-input" placeholder="e.g. 150" min="0" max="800"
+                 value="${S.pCarbTarget}" oninput="S.pCarbTarget=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fat (g)</label>
+          <input type="number" class="form-input" placeholder="e.g. 65" min="10" max="400"
+                 value="${S.pFatTarget}" oninput="S.pFatTarget=this.value">
+        </div>
+      </div>
     </div>
   `;
+}
+
+// Update just the goal-weight recommendation div without re-rendering the whole form
+function updateGoalWeightRec() {
+  const el = document.getElementById('goal-weight-rec');
+  if (!el) return;
+  const totalIn = (parseInt(S.pHeightFt)||0)*12 + (parseInt(S.pHeightIn)||0);
+  if (!totalIn) { el.textContent = 'Enter your height above to see a recommendation'; return; }
+  const hm = totalIn * 0.0254, h2 = hm * hm;
+  const ideal = Math.round(22*h2*2.20462), min = Math.round(18.5*h2*2.20462), max = Math.round(24.9*h2*2.20462);
+  el.innerHTML = `⚖️ Recommended: <strong>${ideal} lbs</strong> · Healthy range: ${min}–${max} lbs (BMI 18.5–24.9)`;
+}
+
+// Recalculate macros from current profile stats and fill the macro target fields
+function recalcMacros() {
+  const fd = {
+    sex:            S.pSex,
+    weight_lbs:     parseFloat(S.pWeight),
+    height_ft:      parseInt(S.pHeightFt),
+    height_in:      parseInt(S.pHeightIn) || 0,
+    age:            parseInt(S.pAge),
+    activity_level: S.pActivity,
+    goal:           S.pGoals.join(','),
+  };
+  if (!fd.sex || !fd.weight_lbs || !fd.height_ft || !fd.age || !fd.activity_level || !S.pGoals.length) {
+    toast('Fill in sex, age, weight, height, activity, and goal first', 'error'); return;
+  }
+  const m = calcMacros(fd);
+  S.pCalTarget  = String(m.daily_calories);
+  S.pProTarget  = String(m.daily_protein_g);
+  S.pCarbTarget = String(m.daily_carbs_g);
+  S.pFatTarget  = String(m.daily_fat_g);
+  rProfile(); _syncOnboarding();
+  toast('Macros recalculated ✨', 'success');
 }
 
 function rProfile() {
@@ -1586,29 +1742,46 @@ function rProfile() {
     <div class="card glass">
       ${profileFormHTML(p)}
       <button class="btn btn-caramel btn-full" onclick="saveProfile()" style="margin-top:6px;">
-        Calculate & Save My Macros ✨
+        Save Profile ✨
       </button>
     </div>
     ${p?.daily_calories ? `
       <div class="card glass">
-        <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--espresso);margin-bottom:3px;">Your Daily Targets</h2>
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--espresso);margin-bottom:3px;">Saved Targets</h2>
         <p style="font-size:.8rem;color:var(--text-mu);margin-bottom:14px;">
-          Mifflin-St Jeor BMR → TDEE × ${({sedentary:'1.2',light:'1.375',moderate:'1.55',active:'1.725',very_active:'1.9'})[p.activity_level]||'multiplier'} → ${({lose:'20% deficit',maintain:'maintenance',gain:'+300 surplus'})[p.goal]||'adjusted'}</p>
+          ${(()=>{const gl={lose:'20% deficit',maintain:'maintenance',gain:'+300 surplus',muscle:'high protein'};const str=(p.goal||'').split(',').filter(Boolean).map(g=>gl[g]||g).join(' + ');return str?`Goal: ${str}`:'Your current daily macro targets';})()}
+          ${p.goal_weight_lbs ? ` · Goal weight: ${p.goal_weight_lbs} lbs` : ''}
+        </p>
         <div class="mr-grid">
-          ${mrBox(p.daily_calories,   'Calories / day', 'var(--caramel-lite)')}
+          ${mrBox(p.daily_calories,    'Calories / day', 'var(--caramel-lite)')}
           ${mrBox(p.daily_protein_g+'g','Protein / day', 'var(--sage-lite)')}
           ${mrBox(p.daily_carbs_g+'g', 'Carbs / day',   'var(--lavender-lite)')}
           ${mrBox(p.daily_fat_g+'g',   'Fat / day',     'var(--amber-lite)')}
         </div>
         <div class="disc disc-lav" style="margin-top:8px;">
-          ℹ️ <span>These are evidence-based estimates. For personalised medical nutrition advice, consult a registered dietitian.</span>
+          ℹ️ <span>Edit any macro value above and re-save to use custom targets. Or click ↻ Recalculate to reset to your stats.</span>
         </div>
       </div>` : ''}
   `;
 }
-function setSex(v)      { S.pSex      = v; rProfile(); if(document.getElementById('onboarding-overlay').style.display!=='none') document.getElementById('onboarding-form-body').innerHTML = profileFormHTML(S.profile); }
-function setActivity(v) { S.pActivity = v; rProfile(); if(document.getElementById('onboarding-overlay').style.display!=='none') document.getElementById('onboarding-form-body').innerHTML = profileFormHTML(S.profile); }
-function setGoal(v)     { S.pGoal     = v; rProfile(); if(document.getElementById('onboarding-overlay').style.display!=='none') document.getElementById('onboarding-form-body').innerHTML = profileFormHTML(S.profile); }
+function _syncOnboarding() {
+  if (document.getElementById('onboarding-overlay').style.display !== 'none')
+    document.getElementById('onboarding-form-body').innerHTML = profileFormHTML(S.profile);
+}
+function setSex(v)      { S.pSex      = v; rProfile(); _syncOnboarding(); }
+function setActivity(v) { S.pActivity = v; rProfile(); _syncOnboarding(); }
+function toggleGoal(k) {
+  const weightGoals = ['lose', 'maintain', 'gain'];
+  if (weightGoals.includes(k)) {
+    // Weight direction goals are mutually exclusive — replace any existing one
+    const others = S.pGoals.filter(g => !weightGoals.includes(g));
+    S.pGoals = S.pGoals.includes(k) ? others : [...others, k];
+  } else {
+    // Muscle (and any future combinable goals) simply toggle
+    S.pGoals = S.pGoals.includes(k) ? S.pGoals.filter(g => g !== k) : [...S.pGoals, k];
+  }
+  rProfile(); _syncOnboarding();
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    RENDER — LIBRARY
@@ -1668,6 +1841,11 @@ function rLibrary() {
           </div>`).join('')}
       </div>`}
   `;
+  // Restore focus so the user can keep typing without re-clicking the search bar
+  if (S.libSearch) {
+    const inp = el.querySelector('.search-input');
+    if (inp) { inp.focus(); inp.setSelectionRange(S.libSearch.length, S.libSearch.length); }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
