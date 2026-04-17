@@ -641,8 +641,8 @@ hr.soft{border:none;border-top:1px solid rgba(44,26,14,.08);margin:18px 0}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* ── Env vars injected by server.js at request time ─────────────────────── */
-const SUPABASE_URL      = '__SUPABASE_URL__';
-const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+const SUPABASE_URL      = (window.__ENV__ && window.__ENV__.SUPABASE_URL)      || '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || '__SUPABASE_ANON_KEY__';
 
 /* ══════════════════════════════════════════════════════════════════════════
    STATE

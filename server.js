@@ -28,9 +28,21 @@ app.get('/', (req, res) => {
     return res.status(404).send('Frontend not found. Make sure public/index.html exists.');
   }
   let html = fs.readFileSync(templatePath, 'utf8');
+
+  // Inject env vars as a <script> tag — more reliable than string replacement
+  const envScript = `<script>
+window.__ENV__ = {
+  SUPABASE_URL: ${JSON.stringify(process.env.SUPABASE_URL || '')},
+  SUPABASE_ANON_KEY: ${JSON.stringify(process.env.SUPABASE_ANON_KEY || '')}
+};
+</script>`;
+  html = html.replace('</head>', envScript + '\n</head>');
+
+  // Also do the original placeholder replacement as a fallback
   html = html
     .replace(/__SUPABASE_URL__/g,      process.env.SUPABASE_URL      || '')
     .replace(/__SUPABASE_ANON_KEY__/g, process.env.SUPABASE_ANON_KEY || '');
+
   res.send(html);
 });
 
@@ -146,6 +158,14 @@ app.get('*', (req, res) => {
     return res.status(404).send('Not found.');
   }
   let html = fs.readFileSync(templatePath, 'utf8');
+
+  const envScript = `<script>
+window.__ENV__ = {
+  SUPABASE_URL: ${JSON.stringify(process.env.SUPABASE_URL || '')},
+  SUPABASE_ANON_KEY: ${JSON.stringify(process.env.SUPABASE_ANON_KEY || '')}
+};
+</script>`;
+  html = html.replace('</head>', envScript + '\n</head>');
   html = html
     .replace(/__SUPABASE_URL__/g,      process.env.SUPABASE_URL      || '')
     .replace(/__SUPABASE_ANON_KEY__/g, process.env.SUPABASE_ANON_KEY || '');
