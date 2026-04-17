@@ -60,6 +60,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ── Public config (safe to expose — anon key only) ────────────────────────────
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl:     process.env.SUPABASE_URL      || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+  });
+});
+
 // ── Claude API Proxy ─────────────────────────────────────────────────────────
 // Keeps your Claude API key server-side only — never exposed to the browser.
 app.post('/api/search-recipes', async (req, res) => {

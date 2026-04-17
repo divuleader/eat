@@ -641,8 +641,9 @@ hr.soft{border:none;border-top:1px solid rgba(44,26,14,.08);margin:18px 0}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* ── Env vars injected by server.js at request time ─────────────────────── */
-const SUPABASE_URL      = (window.__ENV__ && window.__ENV__.SUPABASE_URL)      || '__SUPABASE_URL__';
-const SUPABASE_ANON_KEY = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || '__SUPABASE_ANON_KEY__';
+// Set by server injection; will be overwritten by /api/config fetch in init()
+let SUPABASE_URL      = (window.__ENV__ && window.__ENV__.SUPABASE_URL)      || '__SUPABASE_URL__';
+let SUPABASE_ANON_KEY = (window.__ENV__ && window.__ENV__.SUPABASE_ANON_KEY) || '__SUPABASE_ANON_KEY__';
 
 /* ══════════════════════════════════════════════════════════════════════════
    STATE
@@ -679,6 +680,13 @@ let sb; // Supabase client
    INIT
 ══════════════════════════════════════════════════════════════════════════ */
 async function init() {
+  // Fetch config from server — works regardless of HTML injection method
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    if (cfg.supabaseUrl)     SUPABASE_URL      = cfg.supabaseUrl;
+    if (cfg.supabaseAnonKey) SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+  } catch(e) { /* fall through to env-var check below */ }
+
   if (!SUPABASE_URL || SUPABASE_URL === '__SUPABASE_URL__') {
     showCfgError(); return;
   }
