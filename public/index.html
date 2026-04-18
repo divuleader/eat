@@ -833,9 +833,15 @@ async function init() {
   sb.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
       S.user = session.user;
+      S.session = session;
+      // Override getSession() to return our cached session immediately.
+      // The navigator.locks-based initializePromise can get permanently stuck,
+      // causing every DB query to hang. This bypasses it entirely.
+      sb.auth.getSession = async () => ({ data: { session: S.session }, error: null });
       await loadApp();
     } else {
       S.user = null;
+      S.session = null;
       showAuthScreen();
     }
   });
