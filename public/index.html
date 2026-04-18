@@ -774,6 +774,8 @@ const S = {
   pProTarget:  '',
   pCarbTarget: '',
   pFatTarget:  '',
+  // Inline slot picker on Add Dish page (null = none open)
+  aiSlotPickerIdx: null,
   // Picker
   pickerSlot:   null,
   pickerDish:   null,
@@ -836,7 +838,7 @@ async function loadApp() {
     if (!S.profile) {
       showOnboarding();
     } else {
-      render();
+      nav(S.view || 'dashboard'); // use nav() so active class + render are both applied
     }
   } catch(e) {
     toast('Connection error — check console', 'error');
@@ -912,22 +914,21 @@ async function authSignOut() {
 
 /* ── Onboarding ───────────────────────────────────────────────────────────── */
 function showOnboarding() {
-  // Render the profile form inside the onboarding card
   document.getElementById('onboarding-form-body').innerHTML = profileFormHTML(null);
   document.getElementById('onboarding-overlay').style.display = 'flex';
-  render();
+  nav(S.view || 'dashboard'); // render the view behind the overlay too
 }
 
 function skipOnboarding() {
   document.getElementById('onboarding-overlay').style.display = 'none';
-  render();
+  nav(S.view || 'dashboard');
 }
 
 async function saveProfileOnboarding() {
   await saveProfile();
   if (S.profile) {
     document.getElementById('onboarding-overlay').style.display = 'none';
-    render();
+    nav(S.view || 'dashboard');
   }
 }
 
@@ -1028,13 +1029,31 @@ async function saveProfile() {
     S.pFatTarget  = String(macros.daily_fat_g);
   }
   const payload = { ...fd, ...macros, user_id: S.user.id, updated_at: new Date().toISOString() };
+  // Remove goal_weight_lbs when null so old schema (missing the column) doesn't error
+  if (payload.goal_weight_lbs == null) delete payload.goal_weight_lbs;
+
   let r;
   if (S.profile?.id) {
     r = await sb.from('profiles').update(payload).eq('id', S.profile.id).select().maybeSingle();
   } else {
     r = await sb.from('profiles').insert(payload).select().maybeSingle();
   }
-  if (r.error) { toast('Save failed: '+r.error.message, 'error'); return; }
+  if (r.error) {
+    // Check constraint on old schema rejects comma-separated goals — retry with simple goal
+    if (r.error.message?.includes('violates check constraint')) {
+      const simpleGoal = S.pGoals.find(g => ['lose','maintain','gain'].includes(g)) || 'maintain';
+      const p2 = { ...payload, goal: simpleGoal };
+      const r2 = await (S.profile?.id
+        ? sb.from('profiles').update(p2).eq('id', S.profile.id).select().maybeSingle()
+        : sb.from('profiles').insert(p2).select().maybeSingle());
+      if (!r2.error) {
+        S.profile = r2.data;
+        toast('Profile saved! 🎉 (Run the database migration to unlock multi-goal support)', 'success');
+        rProfile(); return;
+      }
+    }
+    toast('Save failed: '+r.error.message, 'error'); return;
+  }
   S.profile = r.data;
   toast('Profile saved! 🎉', 'success');
   rProfile();
@@ -1067,20 +1086,27 @@ function calcMacros(p) {
    SUPABASE — DISHES
 ══════════════════════════════════════════════════════════════════════════ */
 async function loadDishes() {
-  // Return global seed dishes (user_id IS NULL) plus the logged-in user's own dishes
+  // Try modern schema first (user_id column exists after migration)
   const { data, error } = await sb.from('dishes').select('*')
     .or(`user_id.is.null,user_id.eq.${S.user.id}`)
     .order('name');
-  if (error) throw error;
-  S.dishes = data || [];
+  if (!error) { S.dishes = data || []; return; }
+  // Fallback: migration not yet run — fetch all (old schema has no user_id column)
+  const { data: d2, error: e2 } = await sb.from('dishes').select('*').order('name');
+  if (e2) throw e2;
+  S.dishes = d2 || [];
 }
 
 async function addDish(dish) {
-  const { data, error } = await sb.from('dishes').insert({ ...dish, user_id: S.user.id }).select().maybeSingle();
-  if (error) { toast('Save failed: '+error.message, 'error'); return null; }
-  S.dishes.push(data);
+  // Try with user_id (new schema); fall back without it (old schema, migration pending)
+  let res = await sb.from('dishes').insert({ ...dish, user_id: S.user.id }).select().maybeSingle();
+  if (res.error && res.error.message?.includes('user_id')) {
+    res = await sb.from('dishes').insert(dish).select().maybeSingle();
+  }
+  if (res.error) { toast('Save failed: '+res.error.message, 'error'); return null; }
+  S.dishes.push(res.data);
   S.dishes.sort((a,b) => a.name.localeCompare(b.name));
-  return data;
+  return res.data;
 }
 
 async function delDish(id) {
@@ -1143,7 +1169,7 @@ async function aiSearch() {
   const cat  = document.getElementById('ai-cat')?.value;
   if (!dish) { toast('Enter a dish name first', 'error'); return; }
   S.aiDish = dish; S.aiCat = cat;
-  S.aiLoading = true; S.aiRecipes = []; S.aiExpanded = {};
+  S.aiLoading = true; S.aiRecipes = []; S.aiExpanded = {}; S.aiSlotPickerIdx = null;
   rAddDish();
   try {
     const res  = await fetch('/api/search-recipes', {
@@ -1180,10 +1206,34 @@ async function saveAiRecipe(i) {
     notes:  r.notes  || '',
     source: 'claude_ai'
   });
-  if (saved) { S.aiRecipes[i]._saved = true; rAddDish(); }
+  if (saved) { S.aiRecipes[i]._saved = true; S.aiRecipes[i]._dish = saved; rAddDish(); }
 }
 
 function toggleAiExpand(i) { S.aiExpanded[i] = !S.aiExpanded[i]; rAddDish(); }
+
+// Save recipe (if needed) then open the inline slot picker
+async function startSlotPick(i) {
+  if (!S.aiRecipes[i]._saved) {
+    await saveAiRecipe(i);
+    if (!S.aiRecipes[i]._saved) return; // save failed
+  }
+  S.aiSlotPickerIdx = (S.aiSlotPickerIdx === i) ? null : i;
+  rAddDish();
+}
+
+// Add the saved dish directly to today's meal plan in one click
+async function quickAddToMeal(recipeIdx, slot) {
+  const dish = S.aiRecipes[recipeIdx]?._dish;
+  if (!dish?.id) { toast('Could not find saved recipe', 'error'); return; }
+  const entry = { date: S.selDate, meal_slot: slot, dish_id: dish.id, servings_count: 1, user_id: S.user.id };
+  const { data, error } = await sb.from('meal_plans').insert(entry).select().maybeSingle();
+  if (error) { toast('Could not add to plan: '+error.message, 'error'); return; }
+  S.meals.push({ ...data, dish });
+  S.aiSlotPickerIdx = null;
+  const slotLabel = { breakfast:'Breakfast', lunch:'Lunch', dinner:'Dinner', snack_1:'Snack 1', snack_2:'Snack 2', supplement:'Supplement' }[slot] || slot;
+  toast(`Added to ${slotLabel} 📅`, 'success');
+  rAddDish();
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    AI — RESTAURANT MENU SEARCH
@@ -1891,9 +1941,23 @@ function rAddDish() {
                 <button class="btn btn-ghost btn-sm" onclick="toggleAiExpand(${i})">${S.aiExpanded[i]?'Hide ▲':'Preview ▼'}</button>
                 ${r._saved
                   ? `<span class="badge b-ok" style="text-align:center;padding:7px 10px;">✓ Saved</span>`
-                  : `<button class="btn btn-caramel btn-sm" onclick="saveAiRecipe(${i})">+ Add</button>`}
+                  : `<button class="btn btn-caramel btn-sm" onclick="saveAiRecipe(${i})">📥 Save to Library</button>`}
+                <button class="btn btn-sm" style="background:var(--sage);color:#fff;"
+                        onclick="startSlotPick(${i})">
+                  📅 ${S.aiSlotPickerIdx===i ? 'Cancel' : 'Add to Plan'}
+                </button>
               </div>
             </div>
+            ${S.aiSlotPickerIdx===i ? `
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(139,115,85,.12);">
+                <div style="font-size:.8rem;color:var(--text-mu);margin-bottom:8px;">Add to which meal today?</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  ${[['breakfast','🌅','Breakfast'],['lunch','☀️','Lunch'],['dinner','🌙','Dinner'],
+                     ['snack_1','🍎','Snack 1'],['snack_2','🍵','Snack 2'],['supplement','🍬','Supplement']]
+                    .map(([k,ic,l])=>`<button class="btn btn-ghost btn-sm" onclick="quickAddToMeal(${i},'${k}')">${ic} ${l}</button>`)
+                    .join('')}
+                </div>
+              </div>` : ''}
             ${S.aiExpanded[i] ? `
               <div class="recipe-detail">
                 ${r.ingredients?.length?`
