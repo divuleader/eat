@@ -807,7 +807,13 @@ async function init() {
     showCfgError(); return;
   }
 
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      // Bypass the navigator.locks API which gets permanently stuck in some browsers,
+      // causing all DB queries to hang indefinitely. Safe for single-tab apps.
+      lock: async (_name, _timeout, fn) => fn()
+    }
+  });
 
   // Show auth screen immediately while session is checked
   showAuthScreen();
