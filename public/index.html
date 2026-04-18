@@ -807,13 +807,22 @@ async function init() {
     showCfgError(); return;
   }
 
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      // Bypass the navigator.locks API which gets permanently stuck in some browsers,
-      // causing all DB queries to hang indefinitely. Safe for single-tab apps.
-      lock: async (_name, _timeout, fn) => fn()
-    }
-  });
+  // Patch navigator.locks to prevent Supabase gotrue from hanging indefinitely.
+  // The Web Locks API sometimes gets stuck (orphaned lock from a previous tab/session),
+  // blocking every DB query. This no-op replacement calls the callback immediately.
+  if (navigator.locks && navigator.locks.request) {
+    const _origRequest = navigator.locks.request.bind(navigator.locks);
+    navigator.locks.request = async (name, ...args) => {
+      if (name && name.startsWith('lock:sb-')) {
+        // Supabase auth lock — call fn directly, no actual lock needed for single-tab
+        const fn = args[args.length - 1];
+        if (typeof fn === 'function') return fn();
+      }
+      return _origRequest(name, ...args);
+    };
+  }
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Show auth screen immediately while session is checked
   showAuthScreen();
